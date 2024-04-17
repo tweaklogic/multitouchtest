@@ -21,8 +21,9 @@ Libdrm
 
 ## Compilation
 ```
-gcc multitouchtest.c -o multitouchtest -I/usr/include/drm/ -ldrm -lm -lpthread
+$CC multitouchtest.c -o multitouchtest -I/usr/include/drm/ -ldrm -lm -lpthread
 ```
 ```
-<cross-compiler-prefix>-gcc multitouchtest.c -o multitouchtest -I<libdrm_inc_path> -I<libdrm_inc_path>/drm -L<libdrm_lib_path> -ldrm -lm -lpthread
+source <stm32mp1_toolchain_dir>/environment-setup-cortexa7t2hf-neon-vfpv4-ostl-linux-gnueabi
+$CC multitouchtest.c -o multitouchtest -I<drm_dir>/install/include/ -I<drm_dir>/install/include/libdrm/ -L<drm_dir>/drm/install/lib/ -ldrm -lm -lpthread
 ```

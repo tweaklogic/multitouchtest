@@ -212,8 +212,8 @@ int drm_init()
     if (drm_resources == NULL)
         return -1;
 
-    //drm_resources->module = "stm"; /* Use stm module */
-    drm_resources->module = "i915"; /* Use stm module */
+    drm_resources->module = "stm";
+    /* drm_resources->module = "i915"; */
 
     /* Open with stm module */
     drm_resources->fd = drmOpen(drm_resources->module, NULL);
@@ -233,7 +233,8 @@ int drm_init()
     /* Use the first CRTC and Connector */
     printf("Using first CRTC and Connector\n");
     drm_resources->crtc_id = drm_resources->resources->crtcs[0];
-    drm_resources->connector_id = drm_resources->resources->connectors[0];
+    /* drm_resources->connector_id = drm_resources->resources->connectors[0]; */
+    drm_resources->connector_id = drm_resources->resources->connectors[1];
 
     /* Get the first connector paramaters */
     drm_resources->connector = drmModeGetConnector(drm_resources->fd,
@@ -336,17 +337,17 @@ int event_init()
     if (event_resources == NULL)
         return -1;
 
-//    for (i=0;i<MAX_INPUT_DEV;i++) {
-//        sprintf(event_dev_path, "%s%d", PATH_TOUCH_DEV, i);
-        sprintf(event_dev_path, "%s%d", PATH_TOUCH_DEV, 6);
+ /* for (i=0;i<MAX_INPUT_DEV;i++) {
+        sprintf(event_dev_path, "%s%d", PATH_TOUCH_DEV, i); */
+        sprintf(event_dev_path, "%s%d", PATH_TOUCH_DEV, 0);
         fd = open(event_dev_path, O_RDONLY);
-//        if (fd == -1)
-//            continue;
+     /* if (fd == -1)
+            continue; */
         event_resources->fd = fd;
-        event_resources->dev = 6;
-//        event_resources->dev = i;
-//        break;
-//    }
+        event_resources->dev = 0;
+/*      event_resources->dev = i;
+        break;
+    } */
 
     if(fd == -1)
         return -1;
@@ -419,7 +420,7 @@ void *update_display(void *ptr)
                             drm_resources->pitch[draw_buff_index],
                             &(circle[i]),
                             pos_y, pos_x);
-                            //720 - pos_y, pos_x);
+                            /* 720 - pos_y, pos_x); */
                 }
             }
         }
@@ -488,9 +489,11 @@ int touch_response()
                         pthread_mutex_unlock(&lock);
                     }
                     else if (ev[i].code == ABS_MT_POSITION_X)
-                        slot[current_slot].pos_x = ev[i].value;
-                    else if (ev[i].code == ABS_MT_POSITION_Y)
                         slot[current_slot].pos_y = ev[i].value;
+                     /* slot[current_slot].pos_x = ev[i].value; */
+                    else if (ev[i].code == ABS_MT_POSITION_Y)
+                        slot[current_slot].pos_x = ev[i].value;
+                     /* slot[current_slot].pos_y = ev[i].value; */
                 }
                 else if (ev[i].type == EV_KEY) {
                     if (ev[i].code == BTN_TOUCH) {

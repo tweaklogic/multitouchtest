@@ -30,7 +30,7 @@
 #define PI                      3.14159265
 #define DIA                     200
 #define MAX_TOUCH               4
-#define MAX_INPUT_DEV           8
+#define MAX_INPUT_DEV           20
 #define COLOR_RED               0xF8FF0000
 #define COLOR_GREEN             0xF800FF00
 #define COLOR_BLUE              0xF80000FF
@@ -90,10 +90,39 @@ typedef struct _drm_resourrces {
     uint32_t fb_id[2];
 } drm_resources_t;
 
+struct _drm_index {
+    uint32_t crtc_id;
+    uint32_t connector_id;
+} drm_index[10];
+
 drm_resources_t *drm_resources;
 event_resources_t *event_resources;
 shape_t circle[MAX_TOUCH];
 slot_info_t slot[MAX_TOUCH];
+
+char *drm_module_list[] = {
+    "stm",
+    "vc4",
+    "i915",
+    "amdgpu",
+    "radeon",
+    "nouveau",
+    "vmwgfx",
+    "omapdrm",
+    "exynos",
+    "tilcdc",
+    "msm",
+    "sti",
+    "tegra",
+    "imx-drm",
+    "rockchip",
+    "atmel-hlcdc",
+    "fsl-dcu-drm",
+    "virtio_gpu",
+    "mediatek",
+    "meson",
+    "pl111",
+};
 
 void catch(int signum)
 {
@@ -202,8 +231,10 @@ int draw_shape(void *fb, uint32_t width, uint32_t height,
     return 0;
 }
 
-int drm_init()
+int drm_init(int idx)
 {
+    int crtc_id;
+    int connector_id;
     int ret;
     int i;
 
@@ -212,29 +243,27 @@ int drm_init()
     if (drm_resources == NULL)
         return -1;
 
-    drm_resources->module = "stm";
-    /* drm_resources->module = "i915"; */
+    for (i=0;i<sizeof(drm_module_list);i++) {
+        drm_resources->fd = drmOpen(drm_module_list[i], NULL);
+        if (drm_resources->fd >= 0)
+            break;
+    }
 
-    /* Open with stm module */
-    drm_resources->fd = drmOpen(drm_resources->module, NULL);
     if (drm_resources->fd < 0) {
-        perror("Failed to open module.");
+        perror("Failed to open drm device");
         return -1;
     }
+    drm_resources->module = drm_module_list[i];
+
+    connector_id = drm_index[idx].connector_id;
+    crtc_id = drm_index[idx].crtc_id;
+
+    printf("Using Connector ID:%d, CRTC ID:%d\n", connector_id, crtc_id);
 
     /* Get resources */
     drm_resources->resources = drmModeGetResources(drm_resources->fd);
-    for (i=0;i<drm_resources->resources->count_crtcs;i++)
-        printf("%d. CRTC %u\n", i+1, drm_resources->resources->crtcs[i]);
-
-    for (i=0;i<drm_resources->resources->count_connectors;i++)
-        printf("%d. CONNECTOR %u\n", i+1, drm_resources->resources->connectors[i]);
-    //return -1;
-    /* Use the first CRTC and Connector */
-    printf("Using first CRTC and Connector\n");
-    drm_resources->crtc_id = drm_resources->resources->crtcs[0];
-    /* drm_resources->connector_id = drm_resources->resources->connectors[0]; */
-    drm_resources->connector_id = drm_resources->resources->connectors[1];
+    drm_resources->crtc_id = crtc_id;
+    drm_resources->connector_id = connector_id;
 
     /* Get the first connector paramaters */
     drm_resources->connector = drmModeGetConnector(drm_resources->fd,
@@ -244,7 +273,7 @@ int drm_init()
     drm_resources->height = drm_resources->mode.vdisplay;
 
     for (i=0;i<2;i++) {
-        /* Create a buffer objects */
+        /* Create a buffer object */
         memset(&drm_resources->bo_create[i], 0, sizeof(drm_resources->bo_create[i]));
         drm_resources->bo_create[i].bpp = 32;
         drm_resources->bo_create[i].width = drm_resources->width;
@@ -324,45 +353,24 @@ int drm_destroy()
     return 0;
 }
 
-int event_init()
+int event_init(int event_index)
 {
     int ret;
     int i;
-    char event_dev_path[64];
-    int version;
-    char name[256] = "Unknown";
     int fd;
+    char event_dev_path[64];
 
     event_resources = malloc(sizeof(event_resources_t));
     if (event_resources == NULL)
         return -1;
 
- /* for (i=0;i<MAX_INPUT_DEV;i++) {
-        sprintf(event_dev_path, "%s%d", PATH_TOUCH_DEV, i); */
-        sprintf(event_dev_path, "%s%d", PATH_TOUCH_DEV, 0);
-        fd = open(event_dev_path, O_RDONLY);
-     /* if (fd == -1)
-            continue; */
-        event_resources->fd = fd;
-        event_resources->dev = 0;
-/*      event_resources->dev = i;
-        break;
-    } */
+    sprintf(event_dev_path, "%s%d", PATH_TOUCH_DEV, event_index);
+    fd = open(event_dev_path, O_RDONLY);
+    event_resources->fd = fd;
+    event_resources->dev = event_index;
 
     if(fd == -1)
         return -1;
-
-    ret = ioctl(fd, EVIOCGVERSION, &version);
-    if (ret) {
-        printf("Can't get version.\n");
-        return -1;
-    }
-
-    printf("Driver version: %d.%d.%d\n",
-            version >> 16, (version >> 8) & 0xff, version & 0xff);
-
-    ioctl(fd, EVIOCGNAME(sizeof(name)), name);
-    printf("Name: %s\n", name);
 
     return 0;
 }
@@ -512,8 +520,117 @@ int touch_response()
     return 0;
 }
 
+int show_inputs()
+{
+    int i;
+    int fd;
+    int ret;
+    int version;
+    char event_dev_path[64];
+    char name[256] = "Unknown";
+
+    printf("Input devices:\n");
+    printf("Index\tName\t\tDriver\n");
+    for (i=0;i<MAX_INPUT_DEV;i++) {
+        sprintf(event_dev_path, "%s%d", PATH_TOUCH_DEV, i);
+        fd = open(event_dev_path, O_RDONLY);
+        if (fd == -1)
+            continue;
+
+        ioctl(fd, EVIOCGNAME(sizeof(name)), name);
+        if (ret) {
+            close(fd);
+            continue;
+        }
+        
+        ret = ioctl(fd, EVIOCGVERSION, &version);
+        if (ret) {
+            close(fd);
+            continue;
+        }
+        printf("%d\t", i);
+        printf("%s\t", name);
+        printf("%d.%d.%d\n", version >> 16, (version >> 8) & 0xff,
+                version & 0xff);
+
+        close(fd);
+    }
+    printf("\n");
+
+    return 0;
+}
+
+int show_drm_info()
+{
+    int i;
+    int j;
+    int fd;
+    int ret;
+    int index = 0;
+    int connected;
+    drmModeResPtr resources;
+    drmModeConnectorPtr connector;
+    drmModeModeInfo mode;
+    uint32_t width;
+    uint32_t height;
+    uint32_t crtcs;
+
+    for (i=0;i<sizeof(drm_module_list);i++) {
+        fd = drmOpen(drm_module_list[i], NULL);
+        if (fd >= 0)
+            break;
+    }
+
+    if (fd < 0) {
+        perror("Failed to open drm device");
+        return -1;
+    }
+
+    printf("DRM details:\n");
+    printf("%s module in use\n", drm_module_list[i]);
+
+    resources = drmModeGetResources(fd);
+
+    printf("Index\tConnectors\tModes\t\tPossible CRTCs\n");
+    for (i=0;i<resources->count_connectors;i++) {
+        connector = drmModeGetConnector(fd, resources->connectors[i]);
+        if (connector->connection == DRM_MODE_CONNECTED) {
+            mode = connector->modes[0];
+            printf("%d\t%u\t", index, resources->connectors[i]);
+            printf("\t%dx%d\t\t", mode.hdisplay, mode.vdisplay);
+            crtcs = drmModeConnectorGetPossibleCrtcs(fd, connector);
+            for (j=0;j<resources->count_crtcs; j++) {
+                if (crtcs & (1 << j)) {
+                    drm_index[index].connector_id = resources->connectors[i];
+                    drm_index[index].crtc_id = resources->crtcs[j];
+                    printf("%d ", resources->crtcs[j]);
+                }
+            }
+            index++;
+            printf("\n");
+        }
+    }
+    printf("\n");
+
+    drmClose(fd);
+    return 0;
+}
+
+void show_usage()
+{
+    printf("-s Show all the DRM and Event options\n");
+    printf("-e [Event index] Use the Event device index\n");
+    printf("-d [DRM index] Use the DRM device index\n");
+}
+
 int main(int argc, char *argv[])
 {
+    int opt;
+    int event_index;
+    int drm_index;
+    int show = 0;
+    int drm_ok = 0;
+    int event_ok = 0;
     struct sigaction sigact;
 
     /* Signal handling */
@@ -522,18 +639,53 @@ int main(int argc, char *argv[])
     sigact.sa_handler = catch;
     sigaction(SIGINT, &sigact, NULL);
 
-    pthread_t update_display_id;
+    while ((opt = getopt(argc, argv, "se:d:")) != -1) {
+        switch (opt) {
+            case 's':
+                show =1;
+            break;
+            case 'e':
+                event_index = atoi(optarg);
+                event_ok = 1;
+            break;
+            case 'd':
+                drm_index = atoi(optarg);
+                drm_ok = 1;
+            break;
+            default: /* '?' */
+                show_usage();
+                exit(EXIT_FAILURE);
+        }
+    }
 
+    if (show ==1 && (event_ok == 1 || drm_ok == 1)) {
+        perror("-s option cannot be used with other options\n");
+        return -1;
+    }
+
+    if (show == 1) {
+        show_inputs();
+        show_drm_info();
+        return 0;
+    }
+
+    if (drm_ok == 0 || event_ok == 0) {
+        perror("both -e and -d options have to be provided together\n");
+        return -1;
+    }
+
+    pthread_t update_display_id;
     pthread_create(&update_display_id, NULL, update_display, NULL);
 
     /* Display Init */
-    if (drm_init()) {
+    show_drm_info();
+    if (drm_init(drm_index)) {
         printf("DRM init failed.\n");
         return -1;
     }
 
     /* Touch Init */
-    if (event_init()) {
+    if (event_init(event_index)) {
         printf("Event init failed.\n");
         return -1;
     }

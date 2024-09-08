@@ -639,7 +639,7 @@ int main(int argc, char *argv[])
     sigact.sa_handler = catch;
     sigaction(SIGINT, &sigact, NULL);
 
-    while ((opt = getopt(argc, argv, "se:d:")) != -1) {
+    while ((opt = getopt(argc, argv, "hse:d:")) != -1) {
         switch (opt) {
             case 's':
                 show =1;
@@ -652,7 +652,8 @@ int main(int argc, char *argv[])
                 drm_index = atoi(optarg);
                 drm_ok = 1;
             break;
-            default: /* '?' */
+            case 'h':
+            default:
                 show_usage();
                 exit(EXIT_FAILURE);
         }
